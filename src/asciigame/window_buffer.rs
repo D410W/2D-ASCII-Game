@@ -1,77 +1,99 @@
+#[allow(dead_code)]
+
 use crate::character::Character;
 use crate::runtime_error::RuntimeError;
 
 use crossterm::{
   queue,
-  QueueableCommand,
+  // QueueableCommand,
   style::{SetBackgroundColor, SetForegroundColor, Print}, // Color, ResetColor, 
   cursor,
 };
 
 pub struct WindowBuffer<W> {
-  width: usize,
-  height: usize,
+  width: u16,
+  height: u16,
   characters: Vec<Vec<Character>>,
   writing_handle: W,
 }
 
-impl<W> WindowBuffer<W> {
-  pub fn new(p_width: u32, p_height: u32, p_writing_handle: W) -> Result<Self, RuntimeError> {
+impl<W: std::io::Write + crossterm::QueueableCommand> WindowBuffer<W> {
+  pub fn new(p_width: u16, p_height: u16, p_writing_handle: W) -> Result<Self, RuntimeError> {
     let mut wb = WindowBuffer {
-      width: 0usize,
-      height: 0usize,
+      width: p_width,
+      height: p_height,
       characters: Vec::new(),
       writing_handle: p_writing_handle,
     };
     
-    let w_us : usize = match usize::try_from(p_width) {
-      Ok(val) => val,
-      Err(e) => return Err(RuntimeError::new(e, "Screen width value out of range for usize" )),
-    };
-    let h_us : usize = match usize::try_from(p_width) {
-      Ok(val) => val,
-      Err(e) => return Err(RuntimeError::new(e, "Screen height value out of range for usize" )),
-    };
-    
-    wb.width = w_us;
-    wb.height = h_us;
+    let w_us : usize = p_width.into();
+    let h_us : usize = p_height.into();
     
     // reserving the used screen space
-    wb.characters.push(Vec::<Character>::with_capacity(w_us)); //, Default::default())); // line 0 has size width.
-    wb.characters.resize(h_us, wb.characters[0].clone()); // [height] lines equal to line 0.
+    wb.characters = vec![vec![Character::default(); w_us]; h_us];
     
     return Ok(wb);
   }
   
-  pub fn draw(self: &Self) -> Result<(), RuntimeError> {
-
-    for i in 0usize..self.height {
-      for j in 0usize..self.width {
+  pub fn draw(self: &mut Self) -> Result<(), RuntimeError> {
+  
+    for i in 0usize..self.characters.len() {
+      for j in 0usize..self.characters[0].len() {
 
         let i_u16 : u16 = match u16::try_from(i) {
           Ok(val) => val,
-          Err(e) => return Err(RuntimeError::new(e, "Height of WindowBuffer doesn't fit in u16 for terminal output.")),
+          Err(e) => return Err(RuntimeError::TryFromIntError(e, "Height of WindowBuffer doesn't fit in u16 for terminal output.")),
         };  
         let j_u16 : u16 = match u16::try_from(j) {
           Ok(val) => val,
-          Err(e) => return Err(RuntimeError::new(e, "Width of WindowBuffer doesn't fit in u16 for terminal output.")),
+          Err(e) => return Err(RuntimeError::TryFromIntError(e, "Width of WindowBuffer doesn't fit in u16 for terminal output.")),
         };
         
         let c : &Character = &self.characters[i][j];
         
         queue!(
           self.writing_handle,
-          cursor::MoveTo(i_u16, j_u16),
+          cursor::MoveTo(j_u16, i_u16),
           SetForegroundColor(c.color),
           SetBackgroundColor(c.color_back),
           Print(c.symbol),
         )?;
         
       }
+        
     }
     
-    self.writing_handle.flush();
+    self.flush()?;
+    self.clear();
     
-    Ok(());
+    return Ok(());
   }
+  
+  pub fn set_char(self: &mut Self, row: u16, col: u16, character: Character) -> () {
+    self.characters[usize::from(row)][usize::from(col)] = character;
+  }
+  
+  pub fn clear(self: &mut Self) -> () {
+    for i in 0..usize::from(self.height) {
+      for j in 0..usize::from(self.width) {
+        self.characters[i][j] = Default::default();
+      }
+    }
+  }
+  
+  pub fn fill_char(self: &mut Self, character: Character) -> () {
+    for i in 0..usize::from(self.height) {
+      for j in 0..usize::from(self.width) {
+        self.characters[i][j] = character.clone();
+      }
+    }
+  }
+  
+  pub fn flush(self: &mut Self) -> Result<(), RuntimeError> {
+    match self.writing_handle.flush() {
+      Ok(_) => Ok(()),
+      Err(e) => Err(e.into()),
+    }
+  }
+  
 }

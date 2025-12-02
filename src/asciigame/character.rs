@@ -1,12 +1,15 @@
+#[allow(dead_code)]
+
 use crossterm::{
   style::{Color}, //, Print, ResetColor, SetBackgroundColor, SetForegroundColor},
 };
 
+/// Colored 'character' class. Can be seen as a "pixel" to the WindowBuffer.
 #[derive(Clone)]
 pub struct Character {
-  symbol: char,
-  color: Color,
-  color_back: Color,
+  pub symbol: char,
+  pub color: Color,
+  pub color_back: Color,
 }
 
 impl Default for Character {
