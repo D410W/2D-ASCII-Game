@@ -2,6 +2,7 @@
 
 use crate::{*};
 use crossterm::terminal;
+use std::time::{Duration, Instant};
 
 // trait Drawable {
   
@@ -10,11 +11,12 @@ use crossterm::terminal;
 /// 
 pub struct Game {
   frame_counter: u64,
+  framerate: u64,
+  start_of_frame: Instant, 
+  
   should_run: bool,
   
   wb: WindowBuffer<std::io::Stdout>,
-
-  
   // drawable_objs: Vec<Box<Drawable>> //!< List of objects that should be rendered.
   
 }
@@ -27,6 +29,8 @@ impl Game {
   
     let game = Game { 
       frame_counter: 0,
+      framerate: 10,
+      start_of_frame: Instant::now(),
       should_run: true,
       wb: WindowBuffer::new(term_w, term_h, stdout())?,
     };
@@ -59,33 +63,50 @@ impl Game {
     Ok(())
   }
   
-  pub fn run(&mut self) -> Result<(), RuntimeError> {
-    use std::time;
+  pub fn wait(&mut self) -> Result<(), RuntimeError> {
     use std::thread;
-    use crossterm::style;
+
+    let end_of_frame = Instant::now();
+    let passed_time = end_of_frame.duration_since(self.start_of_frame);
     
-    let mut time_before = time::SystemTime::now();
+    let target_time = std::time::Duration::from_nanos(1_000_000_000/self.framerate);
+    let remaining_time = target_time.saturating_sub(passed_time);
     
+    thread::sleep(remaining_time);
+    
+    self.frame_counter += 1;
+    self.start_of_frame += target_time;
+    
+    Ok(())
+  }
+  
+  pub fn run(&mut self) -> Result<(), RuntimeError> {
+    use crossterm::style::{self, Color};
+    
+    self.start_of_frame = Instant::now();
+        
     while self.should_run {
       self.process_events()?;
     
-      let val: u8 = ((self.frame_counter*10)%255).try_into()?;
-    
       self.wb.fill_char(Character{
-          symbol: 'S',
-          color: style::Color::Rgb{r: 255-val, g: 30, b: 30},
-          color_back: style::Color::Rgb{r: 255-val, g: 30, b: 30}
+        symbol: ' ',
+        color: Color::Rgb{r: 10, g: 10, b: 30},
+        color_back: Color::Rgb{r: 30, g: 30, b: 30}
+      });
+      
+      self.wb.set_char(0, 1, Character{
+        symbol: char::from_digit((self.frame_counter % 10) as u32, 10).unwrap(),
+        color: Color::Rgb{r: 255, g: 255, b:255},
+        ..Default::default()
+      });
+      self.wb.set_char(0, 0, Character{
+        symbol: char::from_digit(((self.frame_counter % 100)/10) as u32, 10).unwrap(),
+        color: Color::Rgb{r: 255, g: 255, b:255},
+        ..Default::default()
       });
 
       self.wb.draw()?;
-      
-      let passed_time = time_before.elapsed()?; 
-      let remaining_time = passed_time.saturating_sub(std::time::Duration::from_millis(1000/60));
-      time_before += passed_time;
-      
-      self.frame_counter = self.frame_counter + 1;
-      
-      thread::sleep(remaining_time);
+      self.wait()?;
     }
 
     Ok(())

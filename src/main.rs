@@ -25,8 +25,16 @@ fn main() -> Result<(), RuntimeError> { // std::io::Result<()> {
   )?;
   
   // 2. Run
-  let mut game = Game::new()?;
-  let game_result = game.run();
+  let mut game_result : Result<(), RuntimeError> = Ok(());
+  
+  let mut game = match Game::new() {
+    Ok(g) => Some(g),
+    Err(e) => {game_result = Err(e); None},
+  };
+
+  if let Some(mut g) = game {
+    game_result = g.run();
+  }
   
   // 3. Teardown
   let _ = execute!(stdout(),

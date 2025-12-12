@@ -2,6 +2,9 @@
 
 #[derive(Debug)]
 pub enum RuntimeError {
+  GenericError {
+    context: String,
+  },
   TryFromIntError {
     source: std::num::TryFromIntError,
     context: String,
