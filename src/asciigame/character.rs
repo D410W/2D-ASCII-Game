@@ -17,3 +17,7 @@ impl Default for Character {
     Character { symbol: ' ', color: Color::White, color_back: Color::Black } // custom default value
   }
 }
+
+impl Copy for Character {
+
+}

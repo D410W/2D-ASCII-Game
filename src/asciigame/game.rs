@@ -1,119 +1,116 @@
 #[allow(dead_code)]
 
-use crate::{*};
-use crossterm::terminal;
+use crate::{WindowBuffer, InputManager, RuntimeError, GameState, InputDispatcher, KeyState};
+
+use crossterm::{terminal, execute, cursor, event::KeyCode};
 use std::time::{Duration, Instant};
+use std::io::{stdout};
 
 // trait Drawable {
   
 // }
 
 /// 
-pub struct Game {
-  frame_counter: u64,
-  framerate: u64,
-  start_of_frame: Instant, 
+pub struct Game<S> {
+  pub frame_counter: u64,
+  pub framerate: u64,
+  pub window_size: (u16, u16),
+  start_of_frame: Instant,
   
-  should_run: bool,
-  
-  wb: WindowBuffer<std::io::Stdout>,
-  // drawable_objs: Vec<Box<Drawable>> //!< List of objects that should be rendered.
+  pub wb: WindowBuffer<std::io::Stdout>,
+  inp_man: InputManager,
+  pub inp_dis: InputDispatcher<S>,
   
 }
 
-impl Game {
+impl<S: GameState> Game<S> {
   pub fn new() -> Result<Self, RuntimeError> {
     use std::io::stdout;
 
     let (term_w, term_h): (u16, u16) = terminal::size()?;
   
-    let game = Game { 
+    let game = Game::<S> { 
       frame_counter: 0,
-      framerate: 10,
+      framerate: 1,
+      window_size: (term_w, term_h),
       start_of_frame: Instant::now(),
-      should_run: true,
       wb: WindowBuffer::new(term_w, term_h, stdout())?,
+      inp_man: InputManager::new(),
+      inp_dis: InputDispatcher::<S>::new(),
     };
     
     Ok(game)
   }
   
-  pub fn process_events(&mut self) -> Result<(), RuntimeError> {
-    use crossterm::event::{poll, read, Event, KeyCode};
-    use std::time::Duration;
-    if poll(Duration::ZERO)? {
-      // It's guaranteed that the 'read()' won't block when the 'poll()'  // function returns 'true' // match read()? { // Event::FocusGained => println!("FocusGained"), // Event::FocusLost => println!("FocusLost"), // Event::Mouse(event) => println!("{:?}", event), // #[cfg(feature = "bracketed-paste")] // Event::Paste(data) => println!("Pasted {:?}", data), // Event::Resize(width, height) => println!("New size {}x{}", width, height), // }
-      if let Event::Key(key_event) = read()? {
-        if key_event.code == KeyCode::Esc {
-          self.should_run = false;
-        }
-      }
-    } else {
-      // Timeout expired and no `Event` is available
-    }
-    
-    Ok(())
-  }
-
-  pub fn update(&mut self) -> Result<(), RuntimeError> {
-    Ok(())
-  }
+  // pub fn key_pressed(&mut self, kc: crossterm::event::KeyCode) -> bool {
+  //   self.inp_man.key(kc)
+  // }
   
-  pub fn draw(&self) -> Result<(), RuntimeError> {
-    Ok(())
-  }
-  
-  pub fn wait(&mut self) -> Result<(), RuntimeError> {
+  fn sync_frame(&mut self) -> Result<(), RuntimeError> {
     use std::thread;
 
     let end_of_frame = Instant::now();
-    let passed_time = end_of_frame.duration_since(self.start_of_frame);
+    let passed_duration = end_of_frame.duration_since(self.start_of_frame);
     
-    let target_time = std::time::Duration::from_nanos(1_000_000_000/self.framerate);
-    let remaining_time = target_time.saturating_sub(passed_time);
+    let target_duration = std::time::Duration::from_nanos(1_000_000_000/self.framerate);
+    let remaining_duration = target_duration.saturating_sub(passed_duration);
     
-    thread::sleep(remaining_time);
+    thread::sleep(remaining_duration);
     
     self.frame_counter += 1;
-    self.start_of_frame += target_time;
+    self.start_of_frame += target_duration;
     
     Ok(())
   }
   
-  pub fn run(&mut self) -> Result<(), RuntimeError> {
-    use crossterm::style::{self, Color};
-    
+  fn game_loop(&mut self, state: &mut S) -> Result<(), RuntimeError> {
     self.start_of_frame = Instant::now();
-        
-    while self.should_run {
-      self.process_events()?;
     
-      self.wb.fill_char(Character{
-        symbol: ' ',
-        color: Color::Rgb{r: 10, g: 10, b: 30},
-        color_back: Color::Rgb{r: 30, g: 30, b: 30}
-      });
+    // 2. Run
+    while state.should_run() {
+      state.update(self)?;
       
-      self.wb.set_char(0, 1, Character{
-        symbol: char::from_digit((self.frame_counter % 10) as u32, 10).unwrap(),
-        color: Color::Rgb{r: 255, g: 255, b:255},
-        ..Default::default()
-      });
-      self.wb.set_char(0, 0, Character{
-        symbol: char::from_digit(((self.frame_counter % 100)/10) as u32, 10).unwrap(),
-        color: Color::Rgb{r: 255, g: 255, b:255},
-        ..Default::default()
-      });
+      self.wb.clear();
+      
+      state.draw(self)?;
 
       self.wb.draw()?;
-      self.wait()?;
+      self.sync_frame()?;
+      self.inp_man.process_events()?;
+      self.inp_dis.dispatch(&mut self.inp_man, state);
     }
-
+    
     Ok(())
+  }
+  
+  pub fn run(&mut self, state: &mut S) -> Result<(), RuntimeError> {
+    // 1. Setup
+    terminal::enable_raw_mode()?;
+    execute!(stdout(),
+      terminal::EnterAlternateScreen,
+      terminal::Clear(crossterm::terminal::ClearType::All),
+      cursor::Hide,
+      crossterm::event::PushKeyboardEnhancementFlags(
+        crossterm::event::KeyboardEnhancementFlags::REPORT_EVENT_TYPES
+      ),
+    )?;
+    
+    let loop_result = self.game_loop(state);
+    
+    // 3. Teardown
+    let _ = execute!(stdout(),
+      crossterm::event::PopKeyboardEnhancementFlags,
+      cursor::Show,
+      terminal::LeaveAlternateScreen,
+    );
+    let _ = terminal::disable_raw_mode();
+
+    return loop_result;
+  }
+  
+  pub fn bind<F>(&mut self, key: KeyCode, key_state: KeyState, callback: F) -> ()
+  where F: FnMut(&mut S) + 'static {
+    self.inp_dis.bind(key, key_state, callback);
   }
   
 }
-
-
-
-
