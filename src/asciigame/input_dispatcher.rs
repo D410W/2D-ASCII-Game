@@ -10,7 +10,8 @@ pub enum KeyState {
   Released, // User just released the key in this frame.
   Unactive, // Key isn't begin used.
   
-  Down,
+  PressedAndReleased, // Pressed and Released in the same frame. 
+  Down, // Pressed or Held or PressedAndReleased
 }
 
 pub struct InputDispatcher<S> {
@@ -36,7 +37,10 @@ impl<S> InputDispatcher<S> {
       let current_state = manager.key(*key_code);
       
       let is_triggered = match target_state {
-        KeyState::Down => current_state == KeyState::Pressed || current_state == KeyState::Held,
+        KeyState::Down => current_state != KeyState::Unactive && current_state != KeyState::Released,
+        
+        KeyState::Released => current_state == KeyState::Released || current_state == KeyState::PressedAndReleased,
+        KeyState::Pressed => current_state == KeyState::Pressed || current_state == KeyState::PressedAndReleased,
         
         _ => current_state == *target_state,
       };
@@ -45,11 +49,12 @@ impl<S> InputDispatcher<S> {
         callback(target);
       }
     }
-    // for event in &manager.key_events {
-    //   if let Some(callback) = self.bindings.get_mut(&event.code) {
-    //     callback(target);
-    //   }
-    // }
+  }
+  
+  pub fn dispatch_single(&mut self, key_code: KeyCode, target: &mut S) { // No KeyState, since we assume it was a 'Pressed' and 'Released' in the same frame.
+    if let Some(callback) = self.bindings.get_mut(&(key_code, KeyState::Pressed)) {
+      callback(target);
+    }
   }
   
 }

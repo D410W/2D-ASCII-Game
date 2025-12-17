@@ -25,7 +25,7 @@ impl Walker {
 }
 
 impl GameState for Walker {
-  fn update(&mut self, ctx: &mut Game<Walker>) -> Result<(), RuntimeError> {
+  fn update(&mut self, ctx: &mut Game<Walker>) {
     
     ctx.bind(KeyCode::Esc, KeyState::Pressed, |gs| { gs.should_run = false; } );
     
@@ -33,14 +33,12 @@ impl GameState for Walker {
     ctx.bind(KeyCode::Char('s'), KeyState::Down, |gs| { gs.pos.0 += 1; } );
     ctx.bind(KeyCode::Char('d'), KeyState::Down, |gs| { gs.pos.1 += 1; } );
     ctx.bind(KeyCode::Char('a'), KeyState::Down, |gs| { gs.pos.1 -= 1; } );
-  
-    Ok(())
+    
   }
   
-  fn draw(&mut self, ctx: &mut Game<Walker>) -> Result<(), RuntimeError> {
+  fn draw(&mut self, ctx: &mut Game<Walker>) {
     ctx.wb.set_char(self.pos.0, self.pos.1, self.player);
     
-    Ok(())
   }
   
   fn should_run(&mut self) -> bool {

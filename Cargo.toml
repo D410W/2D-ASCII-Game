@@ -5,3 +5,13 @@ edition = "2024"
 
 [dependencies]
 crossterm = "0.29"
+winit = { version = "0.30", default-features = false, features = [
+    "x11",
+] }
+
+[profile.release]
+opt-level = "z"     # Optimize for size (instead of '3' for speed)
+lto = true          # Link Time Optimization (removes unused code)
+strip = true        # STRIPS debug symbols (huge size reduction)
+# codegen-units = 1   # Slower compile, but smaller binary
+# panic = "abort"     # Removes stack unwinding code (optional, changes crash behavior)

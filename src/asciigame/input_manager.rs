@@ -26,7 +26,7 @@ impl InputManager {
     for (_key, state) in &mut self.key_events {
       if *state == KeyState::Pressed {
         *state = KeyState::Held;
-      } else if *state == KeyState::Released {
+      } else if *state == KeyState::Released || *state == KeyState::PressedAndReleased {
         *state = KeyState::Unactive;
       }
     }
@@ -43,7 +43,13 @@ impl InputManager {
             }
           },
           KeyEventKind::Repeat => { *current_state = KeyState::Held; },
-          KeyEventKind::Release => { *current_state = KeyState::Released; },
+          KeyEventKind::Release => {
+            if *current_state == KeyState::Pressed {
+              *current_state = KeyState::PressedAndReleased;
+            } else {
+              *current_state = KeyState::Released;
+            }
+          },
         }
       }
     }

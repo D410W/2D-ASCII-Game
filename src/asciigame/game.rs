@@ -68,11 +68,11 @@ impl<S: GameState> Game<S> {
     
     // 2. Run
     while state.should_run() {
-      state.update(self)?;
+      state.update(self);
       
       self.wb.clear();
       
-      state.draw(self)?;
+      state.draw(self);
 
       self.wb.draw()?;
       self.sync_frame()?;
