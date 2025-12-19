@@ -2,6 +2,7 @@ mod asciigame;
 use asciigame::{*};
 
 use crossterm::event::{KeyCode};
+use anyhow::Result;
 
 struct Walker {
   pos: (u16, u16),
@@ -11,21 +12,23 @@ struct Walker {
 }
 
 impl Walker {
-  fn initialize(ctx: &mut Game<Walker>) -> Walker {
+  fn initialize<W>(ctx: &mut Game<Self, W>) -> Self
+  where W: AsciiInterface {
     ctx.framerate = 10;
   
-    let w = Walker{
+    let walker = Walker{
       pos: (10, 10),
       player: Character{ symbol: '@', ..Default::default() },
       should_run: true,
     };
     
-    return w;
+    return walker;
   }
 }
 
-impl GameState for Walker {
-  fn update(&mut self, ctx: &mut Game<Walker>) {
+impl<W> GameState<W> for Walker
+where W: AsciiInterface {
+  fn update(&mut self, ctx: &mut Game<Walker, W>) {
     
     ctx.bind(KeyCode::Esc, KeyState::Pressed, |gs| { gs.should_run = false; } );
     
@@ -36,8 +39,8 @@ impl GameState for Walker {
     
   }
   
-  fn draw(&mut self, ctx: &mut Game<Walker>) {
-    ctx.wb.set_char(self.pos.0, self.pos.1, self.player);
+  fn draw(&mut self, ctx: &mut Game<Walker, W>) {
+    ctx.db.set_char(self.pos.0, self.pos.1, self.player);
     
   }
   
@@ -46,18 +49,20 @@ impl GameState for Walker {
   }
 }
 
-fn main() -> Result<(), RuntimeError> { // std::io::Result<()> {
+fn main() -> Result<()> { // std::io::Result<()> {
   
-  let mut game_result : Result<(), RuntimeError> = Ok(());
+  let mut game_result : Result<()> = Ok(());
   
-  let mut game = match Game::new() {
+  // let game = match Game::<Walker, WindowWrapper>::new(WindowWrapper::new()) {
+  let game = match Game::<Walker, std::io::Stdout>::new(std::io::stdout()) {
     Ok(g) => Some(g),
     Err(e) => {game_result = Err(e); None},
   };
   
 
-  if let Some(mut g) = game.take() {
-    let mut w_state = Walker::initialize(&mut g);
+  if let Some(mut g) = game {
+    // let mut w_state = Walker::initialize::<WindowWrapper>(&mut g);
+    let mut w_state = Walker::initialize::<std::io::Stdout>(&mut g);
     game_result = g.run(&mut w_state);
   }
   

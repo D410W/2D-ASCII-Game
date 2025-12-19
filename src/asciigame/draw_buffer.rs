@@ -1,8 +1,8 @@
 #[allow(dead_code)]
 
-use crate::character::Character;
-use crate::runtime_error::RuntimeError;
+use crate::{Character, AsciiInterface};
 
+use anyhow::Result;
 use crossterm::{
   queue,
   // QueueableCommand,
@@ -10,16 +10,16 @@ use crossterm::{
   cursor,
 };
 
-pub struct WindowBuffer<W> {
+pub struct DrawBuffer<W> {
   width: u16,
   height: u16,
   characters: Vec<Vec<Character>>,
   writing_handle: W,
 }
 
-impl<W: std::io::Write + crossterm::QueueableCommand> WindowBuffer<W> {
-  pub fn new(p_width: u16, p_height: u16, p_writing_handle: W) -> Result<Self, RuntimeError> {
-    let mut wb = WindowBuffer {
+impl<W: AsciiInterface> DrawBuffer<W> {
+  pub fn new(p_width: u16, p_height: u16, p_writing_handle: W) -> Self {
+    let mut wb = DrawBuffer {
       width: p_width,
       height: p_height,
       characters: Vec::new(),
@@ -32,21 +32,21 @@ impl<W: std::io::Write + crossterm::QueueableCommand> WindowBuffer<W> {
     // reserving the used screen space
     wb.characters = vec![vec![Character::default(); w_us]; h_us];
     
-    return Ok(wb);
+    return wb;
   }
   
-  pub fn draw(self: &mut Self) -> Result<(), RuntimeError> {
+  pub fn draw(self: &mut Self) -> Result<()> {
   
     for i in 0usize..self.characters.len() {
       for j in 0usize..self.characters[0].len() {
 
         let i_u16 : u16 = match u16::try_from(i) {
           Ok(val) => val,
-          Err(e) => return Err(RuntimeError::TryFromIntError(e, "Height of WindowBuffer doesn't fit in u16 for terminal output.")),
+          Err(e) => return Err(e.into()),
         };  
         let j_u16 : u16 = match u16::try_from(j) {
           Ok(val) => val,
-          Err(e) => return Err(RuntimeError::TryFromIntError(e, "Width of WindowBuffer doesn't fit in u16 for terminal output.")),
+          Err(e) => return Err(e.into()),
         };
         
         let c : &Character = &self.characters[i][j];
@@ -89,7 +89,7 @@ impl<W: std::io::Write + crossterm::QueueableCommand> WindowBuffer<W> {
     }
   }
   
-  pub fn flush(self: &mut Self) -> Result<(), RuntimeError> {
+  pub fn flush(self: &mut Self) -> Result<()> {
     match self.writing_handle.flush() {
       Ok(_) => Ok(()),
       Err(e) => Err(e.into()),

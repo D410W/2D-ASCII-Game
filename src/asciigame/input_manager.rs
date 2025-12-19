@@ -1,8 +1,9 @@
 #[allow(dead_code)]
-use crate::{Game, RuntimeError, InputDispatcher, KeyState};
+use crate::{Game, InputDispatcher, KeyState};
 
 use crossterm::event::{poll, read, Event, KeyEvent, KeyCode};
 use std::collections::HashMap;
+use anyhow::Result;
 
 pub struct InputManager {
   pub key_events: HashMap<KeyCode, KeyState>,
@@ -19,7 +20,7 @@ impl InputManager {
     self.key_events.entry(key).or_insert(KeyState::Unactive).clone()
   }
   
-  pub fn process_events(&mut self) -> Result<(), RuntimeError> {
+  pub fn process_events(&mut self) -> Result<()> {
     use crossterm::event::{poll, read, Event, KeyEventKind, KeyCode};
     use std::time::Duration;
     

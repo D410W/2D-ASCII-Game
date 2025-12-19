@@ -1,42 +1,45 @@
 #[allow(dead_code)]
 
-use crate::{WindowBuffer, InputManager, RuntimeError, GameState, InputDispatcher, KeyState};
+use crate::{WindowWrapper, DrawBuffer, AsciiInterface, InputManager, GameState, InputDispatcher, KeyState};
 
 use crossterm::{terminal, execute, cursor, event::KeyCode};
 use std::time::{Duration, Instant};
 use std::io::{stdout};
+use anyhow::Result;
 
 // trait Drawable {
   
 // }
 
 /// 
-pub struct Game<S> {
+pub struct Game<GS, W> { // <GameState, Wrapper> 
   pub frame_counter: u64,
   pub framerate: u64,
   pub window_size: (u16, u16),
   start_of_frame: Instant,
   
-  pub wb: WindowBuffer<std::io::Stdout>,
+  pub db: DrawBuffer<W>, // DrawBuffer<std::io::Stdout>,
   inp_man: InputManager,
-  pub inp_dis: InputDispatcher<S>,
+  pub inp_dis: InputDispatcher<GS>,
   
 }
 
-impl<S: GameState> Game<S> {
-  pub fn new() -> Result<Self, RuntimeError> {
-    use std::io::stdout;
+impl<GS, W> Game<GS, W>
+where W: AsciiInterface,
+      GS: GameState<W> {
+  pub fn new(window: W) -> Result<Self> {
+    // use std::io::stdout;
 
     let (term_w, term_h): (u16, u16) = terminal::size()?;
   
-    let game = Game::<S> { 
+    let game = Game::<GS, W> { 
       frame_counter: 0,
       framerate: 1,
       window_size: (term_w, term_h),
       start_of_frame: Instant::now(),
-      wb: WindowBuffer::new(term_w, term_h, stdout())?,
+      db: DrawBuffer::new(term_w, term_h, window),
       inp_man: InputManager::new(),
-      inp_dis: InputDispatcher::<S>::new(),
+      inp_dis: InputDispatcher::<GS>::new(),
     };
     
     Ok(game)
@@ -46,7 +49,7 @@ impl<S: GameState> Game<S> {
   //   self.inp_man.key(kc)
   // }
   
-  fn sync_frame(&mut self) -> Result<(), RuntimeError> {
+  fn sync_frame(&mut self) -> Result<()> {
     use std::thread;
 
     let end_of_frame = Instant::now();
@@ -63,18 +66,20 @@ impl<S: GameState> Game<S> {
     Ok(())
   }
   
-  fn game_loop(&mut self, state: &mut S) -> Result<(), RuntimeError> {
+  fn game_loop(&mut self, state: &mut GS) -> Result<()> {
     self.start_of_frame = Instant::now();
+    
+    // let ws = WindowState::new();
     
     // 2. Run
     while state.should_run() {
       state.update(self);
       
-      self.wb.clear();
+      self.db.clear();
       
       state.draw(self);
 
-      self.wb.draw()?;
+      self.db.draw()?;
       self.sync_frame()?;
       self.inp_man.process_events()?;
       self.inp_dis.dispatch(&mut self.inp_man, state);
@@ -83,7 +88,7 @@ impl<S: GameState> Game<S> {
     Ok(())
   }
   
-  pub fn run(&mut self, state: &mut S) -> Result<(), RuntimeError> {
+  pub fn run(&mut self, state: &mut GS) -> Result<()> {
     // 1. Setup
     terminal::enable_raw_mode()?;
     execute!(stdout(),
@@ -109,7 +114,7 @@ impl<S: GameState> Game<S> {
   }
   
   pub fn bind<F>(&mut self, key: KeyCode, key_state: KeyState, callback: F) -> ()
-  where F: FnMut(&mut S) + 'static {
+  where F: FnMut(&mut GS) + 'static {
     self.inp_dis.bind(key, key_state, callback);
   }
   

@@ -4,9 +4,18 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+anyhow = "1.0.100"
 crossterm = "0.29"
+pollster = "0.4.0"
+wgpu = { version = "27.0.1", default-features = false, features = [
+  "vulkan",   # Native Linux/Windows/Android
+  "dx12",     # Native Windows 10+
+  "metal",    # Native macOS (if you ever cross-compile)
+  # "spirv",  # Optional: Keep this if you use SPIR-V shaders, otherwise WGSL is default
+] }
 winit = { version = "0.30", default-features = false, features = [
     "x11",
+    "rwh_06"  # <--
 ] }
 
 [profile.release]
