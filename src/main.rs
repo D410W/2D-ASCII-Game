@@ -12,9 +12,15 @@ struct Walker {
   should_run: bool,
 }
 
+impl Walker {
+  
+}
+
 impl GameState for Walker {
   fn new(ctx: &mut Engine<Self>) -> Self {
     ctx.framerate = 10;
+    
+    ctx.db.resize(30, 15);
   
     let walker = Walker{
       pos: (10, 10),
@@ -22,24 +28,29 @@ impl GameState for Walker {
       should_run: true,
     };
     
+    ctx.bind(KeyCode::Esc, KeyState::Pressed, |gs| { gs.should_run = false; } );
+    
+    ctx.bind(KeyCode::Char('w'), KeyState::Down, |gs| { if gs.pos.0 > 0 { gs.pos.0 -= 1; } } );
+    ctx.bind(KeyCode::Char('s'), KeyState::Down, |gs| { if gs.pos.0 < 14 { gs.pos.0 += 1; } } );
+    ctx.bind(KeyCode::Char('d'), KeyState::Down, |gs| { if gs.pos.1 < 29 { gs.pos.1 += 1; } } );
+    ctx.bind(KeyCode::Char('a'), KeyState::Down, |gs| { if gs.pos.1 > 0 { gs.pos.1 -= 1; } } );
+    
     return walker;
   }
   
   fn update(&mut self, ctx: &mut Engine<Walker>) {
     
-    ctx.bind(KeyCode::Esc, KeyState::Pressed, |gs| { gs.should_run = false; } );
-    
-    ctx.bind(KeyCode::Char('w'), KeyState::Down, |gs| { gs.pos.0 -= 1; } );
-    ctx.bind(KeyCode::Char('s'), KeyState::Down, |gs| { gs.pos.0 += 1; } );
-    ctx.bind(KeyCode::Char('d'), KeyState::Down, |gs| { gs.pos.1 += 1; } );
-    ctx.bind(KeyCode::Char('a'), KeyState::Down, |gs| { gs.pos.1 -= 1; } );
-    
-    if ctx.frame_counter > 20 { self.should_run = false; }
+    if ctx.frame_counter > 20 { /* self.should_run = false; */ }
     
   }
   
   fn draw(&mut self, ctx: &mut Engine<Walker>) {
-    ctx.db.set_char(self.pos.0, self.pos.1, self.player);
+    // ctx.db.clear();
+    ctx.db.fill_char(Character{
+      symbol: 's',
+      color: Color{r: 100, g: 100, b: 100},
+      ..Default::default()
+    }).set_char(self.pos.0, self.pos.1, self.player);
     
   }
   
@@ -52,8 +63,6 @@ fn main() -> Result<()> {
     
   // let mut game = TerminalGame::<Walker>::new();
   let mut game = WindowGame::<Walker>::new();
-  
-  
 
   if let Ok(mut g) = game {
     // if let Err(e) = g.run() {

@@ -78,8 +78,8 @@ where GS: GameState {
         queue!(
           writing_handle,
           cursor::MoveTo(j_u16, i_u16),
-          SetForegroundColor(c.color),
-          SetBackgroundColor(c.color_back),
+          SetForegroundColor(c.color.into()),
+          SetBackgroundColor(c.color_back.into()),
           Print(c.symbol),
         )?;
         
@@ -102,7 +102,7 @@ where GS: GameState {
       // It's guaranteed that the 'read()' won't block when the 'poll()' function returns 'true' // match read()? { // Event::FocusGained => println!("FocusGained"), // Event::FocusLost => println!("FocusLost"), // Event::Mouse(event) => println!("{:?}", event), // #[cfg(feature = "bracketed-paste")] // Event::Paste(data) => println!("Pasted {:?}", data), // Event::Resize(width, height) => println!("New size {}x{}", width, height), // }
       if let Event::Key(key_event) = read()? {
       
-        self.engine.inp_man.process_key(key_event);
+        self.engine.inp_man.process_crossterm_key(key_event);
         
       }
       
@@ -124,7 +124,7 @@ where GS: GameState {
       
       self.game_state.draw(&mut self.engine);
       self.draw()?;
-      self.engine.db.clear();
+      // self.engine.db.clear();
 
       self.sync_frame()?;
     }

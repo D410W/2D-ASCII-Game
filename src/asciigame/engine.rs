@@ -7,11 +7,7 @@ use std::time::{Duration, Instant};
 use std::io::{stdout};
 use anyhow::Result;
 
-// trait Drawable {
-  
-// }
-
-/// 
+/// Base engige struct. Controls input redirection and stores the ASCII screen.
 pub struct Engine<GS> { // <GameState, Wrapper>
   pub framerate: u64,
   pub frame_counter: u64,
@@ -19,7 +15,6 @@ pub struct Engine<GS> { // <GameState, Wrapper>
   pub db: DrawBuffer, // DrawBuffer<std::io::Stdout>,
   pub inp_man: InputManager,
   pub inp_dis: InputDispatcher<GS>,
-  
 }
 
 impl<GS> Engine<GS>

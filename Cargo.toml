@@ -7,20 +7,27 @@ edition = "2024"
 anyhow = "1.0.100"
 crossterm = "0.29"
 pollster = "0.4.0"
-wgpu = { version = "27.0.1", default-features = false, features = [
+wgpu = { version = "28.0.0", default-features = false, features = [
+  
   "vulkan",   # Native Linux/Windows/Android
   "dx12",     # Native Windows 10+
   "metal",    # Native macOS (if you ever cross-compile)
-  # "spirv",  # Optional: Keep this if you use SPIR-V shaders, otherwise WGSL is default
 ] }
 winit = { version = "0.30", default-features = false, features = [
-    "x11",
-    "rwh_06"  # <--
+  "x11",
+  "rwh_06",
+] }
+image = { version = "0.24", default-features = false, features = [
+  "png",
+] }
+glyphon = "0.10.0"
+bytemuck = { version = "1.16", features = [
+  "derive",
 ] }
 
-[profile.release]
-opt-level = "z"     # Optimize for size (instead of '3' for speed)
-lto = true          # Link Time Optimization (removes unused code)
-strip = true        # STRIPS debug symbols (huge size reduction)
+# [profile.release]
+# opt-level = "z"     # Optimize for size (instead of '3' for speed)
+# lto = true          # Link Time Optimization (removes unused code)
+# strip = true        # STRIPS debug symbols (huge size reduction)
 # codegen-units = 1   # Slower compile, but smaller binary
 # panic = "abort"     # Removes stack unwinding code (optional, changes crash behavior)

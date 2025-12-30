@@ -8,7 +8,8 @@ pub struct DrawBuffer {
   pub width: u32,
   pub height: u32,
   pub characters: Vec<Vec<Character>>,
-  // writing_handle: W,
+  
+  pub text_changed: bool,
 }
 
 impl DrawBuffer {
@@ -17,11 +18,12 @@ impl DrawBuffer {
       width: p_width,
       height: p_height,
       characters: Vec::new(),
-      // writing_handle: p_writing_handle,
+      
+      text_changed: true,
     };
     
-    let w_us : usize = p_width as usize;
-    let h_us : usize = p_height as usize;
+    let w_us = p_width as usize;
+    let h_us = p_height as usize;
     
     // reserving the used screen space
     wb.characters = vec![vec![Character::default(); w_us]; h_us];
@@ -29,24 +31,49 @@ impl DrawBuffer {
     return wb;
   }
   
-  pub fn set_char(self: &mut Self, row: u32, col: u32, character: Character) -> () {
-    self.characters[row as usize][col as usize] = character;
+  pub fn resize(&mut self, p_width: u32, p_height: u32) -> &mut Self {
+    let w_us = p_width as usize;
+    let h_us = p_height as usize;
+    
+    for line in &mut self.characters {
+      line.resize(w_us, Default::default());
+    }
+    
+    self.characters.resize(h_us, vec![Character::default(); w_us]);
+    
+    self.width = p_width;
+    self.height = p_height;
+    
+    self
   }
   
-  pub fn clear(self: &mut Self) -> () {
+  pub fn set_char(&mut self, row: u32, col: u32, character: Character) -> &mut Self {
+    self.characters[row as usize][col as usize] = character;
+    self.text_changed = true;
+    
+    self
+  }
+  
+  pub fn clear(&mut self) -> &mut Self {
     for i in 0..(self.height as usize) {
       for j in 0..(self.width as usize) {
         self.characters[i][j] = Default::default();
       }
     }
+    self.text_changed = true;
+    
+    self
   }
   
-  pub fn fill_char(self: &mut Self, character: Character) -> () {
+  pub fn fill_char(&mut self, character: Character) -> &mut Self {
     for i in 0..(self.height as usize) {
       for j in 0..(self.width as usize) {
         self.characters[i][j] = character.clone();
       }
     }
+    self.text_changed = true;
+    
+    self
   }
   
   // pub fn flush(self: &mut Self) -> Result<()> {
