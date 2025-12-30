@@ -20,7 +20,9 @@ impl GameState for Walker {
   fn new(ctx: &mut Engine<Self>) -> Self {
     ctx.framerate = 10;
     
-    ctx.db.resize(30, 15);
+    let (swidth, sheight) = (30, 15);
+    
+    ctx.db.resize(swidth, sheight);
   
     let walker = Walker{
       pos: (10, 10),
@@ -30,10 +32,10 @@ impl GameState for Walker {
     
     ctx.bind(KeyCode::Esc, KeyState::Pressed, |gs| { gs.should_run = false; } );
     
-    ctx.bind(KeyCode::Char('w'), KeyState::Down, |gs| { if gs.pos.0 > 0 { gs.pos.0 -= 1; } } );
-    ctx.bind(KeyCode::Char('s'), KeyState::Down, |gs| { if gs.pos.0 < 14 { gs.pos.0 += 1; } } );
-    ctx.bind(KeyCode::Char('d'), KeyState::Down, |gs| { if gs.pos.1 < 29 { gs.pos.1 += 1; } } );
-    ctx.bind(KeyCode::Char('a'), KeyState::Down, |gs| { if gs.pos.1 > 0 { gs.pos.1 -= 1; } } );
+    ctx.bind(KeyCode::Char('w'), KeyState::Down, move |gs| { if gs.pos.1 > 0 { gs.pos.1 -= 1; } } );
+    ctx.bind(KeyCode::Char('s'), KeyState::Down, move |gs| { if gs.pos.1 < sheight - 1 { gs.pos.1 += 1; } } );
+    ctx.bind(KeyCode::Char('d'), KeyState::Down, move |gs| { if gs.pos.0 < swidth - 1 { gs.pos.0 += 1; } } );
+    ctx.bind(KeyCode::Char('a'), KeyState::Down, move |gs| { if gs.pos.0 > 0 { gs.pos.0 -= 1; } } );
     
     return walker;
   }
@@ -45,12 +47,24 @@ impl GameState for Walker {
   }
   
   fn draw(&mut self, ctx: &mut Engine<Walker>) {
-    // ctx.db.clear();
-    ctx.db.fill_char(Character{
-      symbol: 's',
-      color: Color{r: 100, g: 100, b: 100},
-      ..Default::default()
-    }).set_char(self.pos.0, self.pos.1, self.player);
+
+    let (width, height) = ctx.db.get_size();
+    
+    for w in 1..=width {
+      for h in 1..=height {
+      
+        let bcolor = ( (h+w) as u8 % 2 ) * 100;
+      
+        ctx.db.set_char(w-1, h-1, Character{
+          symbol: '#',
+          color: Color{r: 100, g: 100, b: 100},
+          color_back: Color{r: bcolor, g: 0, b: 0},
+        });
+        
+      }
+    }
+    
+    ctx.db.set_char(self.pos.0, self.pos.1, self.player);
     
   }
   

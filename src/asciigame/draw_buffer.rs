@@ -31,6 +31,10 @@ impl DrawBuffer {
     return wb;
   }
   
+  pub fn get_size(&mut self) -> (u32, u32) {
+    return (self.width, self.height);
+  }
+  
   pub fn resize(&mut self, p_width: u32, p_height: u32) -> &mut Self {
     let w_us = p_width as usize;
     let h_us = p_height as usize;
@@ -47,7 +51,7 @@ impl DrawBuffer {
     self
   }
   
-  pub fn set_char(&mut self, row: u32, col: u32, character: Character) -> &mut Self {
+  pub fn set_char(&mut self, col: u32, row: u32, character: Character) -> &mut Self {
     self.characters[row as usize][col as usize] = character;
     self.text_changed = true;
     

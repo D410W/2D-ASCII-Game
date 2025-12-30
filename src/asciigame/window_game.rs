@@ -25,6 +25,11 @@ pub struct WindowState {
   size: winit::dpi::PhysicalSize<u32>,
   window: Arc<Window>,
   
+  // shader fields
+  bg_pipeline: wgpu::RenderPipeline,
+  bg_instance_buffer: wgpu::Buffer,
+  num_bg_instances: u32,
+  
   // glyphon fields
   font_system: glyphon::FontSystem,
   text_renderer: glyphon::TextRenderer,
@@ -83,6 +88,45 @@ impl WindowState {
     
     surface.configure(&device, &surface_config);
     
+    // shader setup
+    let shader = device.create_shader_module(wgpu::include_wgsl!("rect_shader.wgsl"));
+    
+    let bg_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+      label: Some("Background Rect Pipeline"),
+      layout: None,
+      vertex: wgpu::VertexState {
+        module: &shader,
+        entry_point: Some("vs_main"),
+        compilation_options: wgpu::PipelineCompilationOptions::default(),
+        buffers: &[crate::RectInstance::desc()], // Describe our struct
+      },
+      primitive: wgpu::PrimitiveState {
+        topology: wgpu::PrimitiveTopology::TriangleStrip, // 4 verts per rect
+        ..Default::default()
+      },
+      depth_stencil: None,
+      multisample: wgpu::MultisampleState::default(),
+      fragment: Some(wgpu::FragmentState {
+        module: &shader,
+        entry_point: Some("fs_main"),
+        compilation_options: wgpu::PipelineCompilationOptions::default(),
+        targets: &[Some(wgpu::ColorTargetState {
+          format: surface_format,
+          blend: Some(wgpu::BlendState::ALPHA_BLENDING),
+          write_mask: wgpu::ColorWrites::ALL,
+        })],
+      }),
+      multiview_mask: None,
+      cache: None,
+    });
+    
+    let bg_instance_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some("Instance Buffer"),
+        size: (std::mem::size_of::<crate::RectInstance>() * 5000) as u64, // 5000 is theoretically the maximum size
+        usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    
     // glyphon setup
     let mut font_system = glyphon::FontSystem::new_with_locale_and_db(
       "en-US".into(), 
@@ -120,6 +164,10 @@ impl WindowState {
       size: size,
       window: window,
       
+      bg_pipeline,
+      bg_instance_buffer,
+      num_bg_instances: 0,
+      
       font_system,
       text_renderer,
       text_atlas,
@@ -128,7 +176,7 @@ impl WindowState {
       buffer,
       metrics: glyphon::Metrics{ font_size: 32.0, line_height: 32.0 },
       
-      span_cache: Vec::with_capacity(2000),
+      span_cache: Vec::with_capacity(5000),
     });
   }
   
@@ -238,10 +286,17 @@ where GS: GameState {
       label: Some("Render Encoder"),
     };
     let mut command_encoder = ws.device.create_command_encoder(&command_enconder_descriptor); // CommandEncoder
+    
+    let window_width = ws.config.width as f32;
+    let window_height = ws.config.height as f32;
+    
+    let left_offset = ( window_width - ws.metrics.font_size * self.engine.db.width as f32 ) / 2.0;
+    let top_offset = ( window_height - ws.metrics.line_height * self.engine.db.height as f32 ) / 2.0;
   
     // glyphon preparation
     if self.engine.db.text_changed {
       
+      // text update:
       ws.span_cache.clear();
       
       for row in &self.engine.db.characters {
@@ -280,13 +335,58 @@ where GS: GameState {
       
       ws.buffer.shape_until_scroll(&mut ws.font_system, false);
       
+      // background update
+      let mut bg_data: Vec<crate::RectInstance> = Vec::new();
+      
+      let cell_w_pixels = ws.metrics.font_size;
+      let cell_h_pixels = ws.metrics.font_size;
+      
+      
+      // convert Pixel Size to Clip Space Size (0.0 to 2.0 range)
+      let cell_w_clip = (cell_w_pixels / window_width) * 2.0;
+      let cell_h_clip = (cell_h_pixels / window_height) * 2.0;
+      let x_offset = (left_offset / window_width) * 2.0;
+      let y_offset = (top_offset / window_height) * 2.0;
+      
+      let nudge_y_offset = (-1.5 / window_height) * 2.0;
+
+      for (row_idx, row) in self.engine.db.characters.iter().enumerate() {
+        for (col_idx, char_struct) in row.iter().enumerate() {
+          
+          // skip if background is pure black (optimization)
+          if char_struct.color_back.r == 0 && char_struct.color_back.g == 0 && char_struct.color_back.b == 0 {
+              continue;
+          }
+          
+          let x = -1.0 + (col_idx as f32 * cell_w_clip + x_offset);
+          let y = 1.0 - (row_idx as f32 * cell_h_clip + y_offset + nudge_y_offset) - cell_h_clip; 
+
+          bg_data.push(crate::RectInstance {
+            position: [x, y],
+            color: [char_struct.color_back.r as f32 / 255.0, char_struct.color_back.g as f32 / 255.0, char_struct.color_back.b as f32 / 255.0],
+            size: [cell_w_clip, cell_h_clip],
+          });
+        }
+      }
+      
+      // check if buffer is big enough
+      let needed_size = (bg_data.len() * std::mem::size_of::<crate::RectInstance>()) as u64;
+      if needed_size > ws.bg_instance_buffer.size() {
+        // println!("Warning: resizing background buffer!");
+        ws.bg_instance_buffer = ws.device.create_buffer(&wgpu::BufferDescriptor {
+          label: Some("Instance Buffer"),
+          size: needed_size * 2, // Grow x2
+          usage: wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::COPY_DST,
+          mapped_at_creation: false,
+        });
+      }
+      
+      // Upload to GPU
+      ws.queue.write_buffer(&ws.bg_instance_buffer, 0, bytemuck::cast_slice(&bg_data));
+      ws.num_bg_instances = bg_data.len() as u32;
+      
+      self.engine.db.text_changed = false;
     }
-    
-    let window_width = ws.config.width as f32;
-    let window_height = ws.config.height as f32;
-    
-    let left_offset = ( window_width - ws.metrics.font_size as f32 * self.engine.db.width as f32 ) / 2.0;
-    let top_offset = ( window_height - ws.metrics.font_size as f32 * self.engine.db.height as f32 ) / 2.0;
     
     let text_area = glyphon::TextArea {
       buffer: &ws.buffer,
@@ -345,6 +445,13 @@ where GS: GameState {
     
       let mut render_pass = command_encoder.begin_render_pass(&render_pass_descriptor);
       
+      // background
+      render_pass.set_pipeline(&ws.bg_pipeline);
+      render_pass.set_vertex_buffer(0, ws.bg_instance_buffer.slice(..));
+      // draw 4 vertices (TriangleStrip) * N instances
+      render_pass.draw(0..4, 0..ws.num_bg_instances);
+    
+      // letters
       ws.text_renderer.render(&ws.text_atlas, &ws.view_port, &mut render_pass).unwrap();
 
     }
