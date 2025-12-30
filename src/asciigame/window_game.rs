@@ -249,12 +249,15 @@ impl WindowState {
 pub struct WindowGame<GS>
 where GS: GameState {
   window_state: Option<WindowState>,  
+  
   // game stuff
-  pub start_of_frame: Instant,
+  current_time: Instant,
+  fixed_time_step: Duration,
+  accumulator: Duration,
   
   engine: Engine<GS>,
   game_state: GS,
-
+  
 }
 
 impl<GS> WindowGame<GS>
@@ -268,7 +271,10 @@ where GS: GameState {
     Ok(Self{
       window_state: None,
       
-      start_of_frame: Instant::now(),
+      current_time: Instant::now(),
+      fixed_time_step: Duration::new(0,0),
+      accumulator: Duration::new(0,0),
+      
       engine: eng,
       game_state: gs,
     })
@@ -468,13 +474,8 @@ where GS: GameState {
   fn game_step(&mut self, event_loop: &ActiveEventLoop) {
     // game loop logic is placed here
     
-    // Missing:
-    //   sync_frame,
-    
-    self.start_of_frame = Instant::now();
-    
     self.engine.frame_counter += 1;
-
+    
     if !(self.game_state.should_run()) {
       event_loop.exit();
       
@@ -485,23 +486,7 @@ where GS: GameState {
     
     self.game_state.update(&mut self.engine);
     
-    self.game_state.draw(&mut self.engine);
-    match self.draw() {
-      Ok(_) => {}
-      Err(SurfaceError::Lost) => { // If the swapchain is lost (e.g. driver update, monitor unplugged), recreate it
-        if let Some(ws) = &mut self.window_state {
-          ws.resize(ws.size, self.engine.db.height, self.engine.db.width);
-          self.engine.db.text_changed = true;
-        }
-      },
-      Err(SurfaceError::OutOfMemory) => event_loop.exit(), // The system is out of memory, we should quit
-      Err(e) => eprintln!("{:?}", e), // All other errors (Outdated, Timeout) should be resolved by the next frame
-    }
-    // self.engine.db.clear();
-    
     self.engine.inp_man.cycle_events();
-
-    // self.sync_frame()?; // TODO
     
   }
   
@@ -514,7 +499,6 @@ where GS: GameState {
     let attributes = Window::default_attributes()
       .with_title("ASCII Engine")
       .with_transparent(false)
-      // .with_fullscreen(None) // Some(winit::window::Fullscreen::Borderless(None)))
       .with_maximized(true)
       .with_active(true);
   
@@ -548,9 +532,32 @@ where GS: GameState {
       },
       WindowEvent::RedrawRequested => {
         
-        self.game_step(event_loop);
+        let new_time = Instant::now();
+        let frame_time = new_time - self.current_time;
+        self.current_time = new_time;
         
+        self.accumulator += frame_time;
+        
+        while self.accumulator >= self.engine.fixed_time_step {
+          self.game_step(event_loop);
+          
+          self.accumulator -= self.engine.fixed_time_step;
+        }
+        
+        self.game_state.draw(&mut self.engine);
+        match self.draw() {
+          Ok(_) => {}
+          Err(SurfaceError::Lost) => { // If the swapchain is lost (e.g. driver update, monitor unplugged), recreate it
+            if let Some(ws) = &mut self.window_state {
+              ws.resize(ws.size, self.engine.db.height, self.engine.db.width);
+              self.engine.db.text_changed = true;
+            }
+          },
+          Err(SurfaceError::OutOfMemory) => event_loop.exit(), // The system is out of memory, we should quit
+          Err(e) => eprintln!("{:?}", e), // All other errors (Outdated, Timeout) should be resolved by the next frame
+        }        
         // end of game logic
+        
         // Queue a RedrawRequested event.
         if let Some(ws) = &mut self.window_state {
           ws.render(); // calls window.request_redraw()
