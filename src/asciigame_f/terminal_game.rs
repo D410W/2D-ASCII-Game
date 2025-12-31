@@ -1,5 +1,3 @@
-#[allow(dead_code)]
-
 use crate::{GameState, Engine, Character};
 
 use crossterm::{terminal, execute, cursor, queue, event::KeyCode,
@@ -39,7 +37,7 @@ where GS: GameState {
     Ok(s)
   }
   
-  fn sync_frame(&mut self) -> Result<()> {
+  fn sync_frame(&mut self) {
     use std::thread;
 
     let end_of_frame = Instant::now();
@@ -52,32 +50,26 @@ where GS: GameState {
     
     self.engine.frame_counter += 1;
     self.start_of_frame += target_duration;
-    
-    Ok(())
   }
   
-  fn draw(self: &mut Self) -> Result<()> {
+  fn draw(&mut self) -> Result<()> {
     use std::io::{Write, stdout};
   
     let mut writing_handle = std::io::BufWriter::new(stdout().lock());
   
-    for i in 0usize..self.engine.db.characters.len() {
-      for j in 0usize..self.engine.db.characters[0].len() {
+    let (db_width, db_height) = self.engine.db.get_size_usize();
+  
+    for y in 0..db_height {
+      for x in 0..db_width {
 
-        let i_u16 : u16 = match u16::try_from(i) {
-          Ok(val) => val,
-          Err(e) => return Err(e.into()),
-        };  
-        let j_u16 : u16 = match u16::try_from(j) {
-          Ok(val) => val,
-          Err(e) => return Err(e.into()),
-        };
+        let x_u16: u16 = u16::try_from(x)?;
+        let y_u16: u16 = u16::try_from(y)?;
         
-        let c : &Character = &self.engine.db.characters[i][j];
+        let c: &Character = &self.engine.db[(x, y)];
         
         queue!(
           writing_handle,
-          cursor::MoveTo(j_u16, i_u16),
+          cursor::MoveTo(x_u16, y_u16),
           SetForegroundColor(c.color.into()),
           SetBackgroundColor(c.color_back.into()),
           Print(c.symbol),
@@ -89,7 +81,7 @@ where GS: GameState {
     
     writing_handle.flush()?;
     
-    return Ok(());
+    Ok(())
   }
   
   fn process_events(&mut self) -> Result<()> {
@@ -124,9 +116,8 @@ where GS: GameState {
       
       self.game_state.draw(&mut self.engine);
       self.draw()?;
-      // self.engine.db.clear();
 
-      self.sync_frame()?;
+      self.sync_frame();
     }
     
     Ok(())
@@ -154,7 +145,7 @@ where GS: GameState {
     );
     let _ = terminal::disable_raw_mode();
 
-    return loop_result;
+    loop_result
   }
 
 }

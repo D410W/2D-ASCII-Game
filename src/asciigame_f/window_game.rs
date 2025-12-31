@@ -1,12 +1,9 @@
-#[allow(dead_code)]
-
 use std::sync::Arc;
 use wgpu::{*};
 use winit::{
   application::ApplicationHandler,
   event::*,
   event_loop::{ActiveEventLoop, EventLoop},
-  keyboard::{KeyCode, PhysicalKey},
   window::{Window, WindowId},
 };
 
@@ -29,6 +26,7 @@ pub struct WindowState {
   bg_pipeline: wgpu::RenderPipeline,
   bg_instance_buffer: wgpu::Buffer,
   num_bg_instances: u32,
+  bg_data: Vec<crate::RectInstance>,
   
   // glyphon fields
   font_system: glyphon::FontSystem,
@@ -156,17 +154,18 @@ impl WindowState {
     
     let _ = Self::load_font(&mut font_system)?;
     
-    return Ok(WindowState{
-      surface: surface,
-      device: device,
-      queue: queue,
+    Ok(WindowState{
+      surface,
+      device,
+      queue,
       config: surface_config,
-      size: size,
-      window: window,
+      size,
+      window,
       
       bg_pipeline,
       bg_instance_buffer,
       num_bg_instances: 0,
+      bg_data: Vec::with_capacity(5000),
       
       font_system,
       text_renderer,
@@ -177,7 +176,7 @@ impl WindowState {
       metrics: glyphon::Metrics{ font_size: 32.0, line_height: 32.0 },
       
       span_cache: Vec::with_capacity(5000),
-    });
+    })
   }
   
   pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>, grid_cols: u32, grid_rows: u32) {
@@ -228,19 +227,15 @@ impl WindowState {
     
     font_system.db_mut().load_font_data(font_data);
     
-    let mut font_name = "";
-    
-    if let Some(face) = font_system.db().faces().last() {
-
-      if let Some((name, _)) = face.families.first() {
-        font_name = name;
-      }
+    let font_name = 
+    if let Some(face) = font_system.db().faces().last()
+    && let Some((name, _)) = face.families.first() {
+      name
+    } else {
+      ""
+    };
       
-    }
-    
-    return Ok(font_name.to_string());
-    
-    // return Ok(font_name);
+    Ok(font_name.to_string())
   }
   
 }
@@ -293,20 +288,28 @@ where GS: GameState {
     };
     let mut command_encoder = ws.device.create_command_encoder(&command_enconder_descriptor); // CommandEncoder
     
+    let (db_width, db_height) = self.engine.db.get_size_usize();
+    
     let window_width = ws.config.width as f32;
     let window_height = ws.config.height as f32;
     
-    let left_offset = ( window_width - ws.metrics.font_size * self.engine.db.width as f32 ) / 2.0;
-    let top_offset = ( window_height - ws.metrics.line_height * self.engine.db.height as f32 ) / 2.0;
+    let left_offset = ( window_width - ws.metrics.font_size * db_width as f32 ) / 2.0;
+    let top_offset = ( window_height - ws.metrics.line_height * db_height as f32 ) / 2.0;
   
+    // println!("draw");
+    
     // glyphon preparation
     if self.engine.db.text_changed {
+      
+      // println!("redraw");
       
       // text update:
       ws.span_cache.clear();
       
-      for row in &self.engine.db.characters {
-        for char_struct in row {
+      for row in 0..=db_height-1 {
+        for col in 0..=db_width-1 {
+        
+          let char_struct = &self.engine.db[(col,row)];
           // Convert the Engine Color to Glyphon Color
           let g_color = glyphon::Color::rgb(
             char_struct.color.r,
@@ -342,11 +345,10 @@ where GS: GameState {
       ws.buffer.shape_until_scroll(&mut ws.font_system, false);
       
       // background update
-      let mut bg_data: Vec<crate::RectInstance> = Vec::new();
+      ws.bg_data.clear();
       
       let cell_w_pixels = ws.metrics.font_size;
       let cell_h_pixels = ws.metrics.font_size;
-      
       
       // convert Pixel Size to Clip Space Size (0.0 to 2.0 range)
       let cell_w_clip = (cell_w_pixels / window_width) * 2.0;
@@ -355,9 +357,11 @@ where GS: GameState {
       let y_offset = (top_offset / window_height) * 2.0;
       
       let nudge_y_offset = (-1.5 / window_height) * 2.0;
-
-      for (row_idx, row) in self.engine.db.characters.iter().enumerate() {
-        for (col_idx, char_struct) in row.iter().enumerate() {
+      
+      for row_idx in 0..=db_height-1 {
+        for col_idx in 0..=db_width-1 {
+        
+          let char_struct = &self.engine.db[(col_idx,row_idx)];
           
           // skip if background is pure black (optimization)
           if char_struct.color_back.r == 0 && char_struct.color_back.g == 0 && char_struct.color_back.b == 0 {
@@ -367,7 +371,7 @@ where GS: GameState {
           let x = -1.0 + (col_idx as f32 * cell_w_clip + x_offset);
           let y = 1.0 - (row_idx as f32 * cell_h_clip + y_offset + nudge_y_offset) - cell_h_clip; 
 
-          bg_data.push(crate::RectInstance {
+          ws.bg_data.push(crate::RectInstance {
             position: [x, y],
             color: [char_struct.color_back.r as f32 / 255.0, char_struct.color_back.g as f32 / 255.0, char_struct.color_back.b as f32 / 255.0],
             size: [cell_w_clip, cell_h_clip],
@@ -376,7 +380,7 @@ where GS: GameState {
       }
       
       // check if buffer is big enough
-      let needed_size = (bg_data.len() * std::mem::size_of::<crate::RectInstance>()) as u64;
+      let needed_size = (ws.bg_data.len() * std::mem::size_of::<crate::RectInstance>()) as u64;
       if needed_size > ws.bg_instance_buffer.size() {
         // println!("Warning: resizing background buffer!");
         ws.bg_instance_buffer = ws.device.create_buffer(&wgpu::BufferDescriptor {
@@ -388,8 +392,10 @@ where GS: GameState {
       }
       
       // Upload to GPU
-      ws.queue.write_buffer(&ws.bg_instance_buffer, 0, bytemuck::cast_slice(&bg_data));
-      ws.num_bg_instances = bg_data.len() as u32;
+      ws.queue.write_buffer(&ws.bg_instance_buffer, 0, bytemuck::cast_slice(&ws.bg_data));
+      ws.num_bg_instances = ws.bg_data.len() as u32;
+      
+      // print!("redraw");
       
       self.engine.db.text_changed = false;
     }
@@ -516,7 +522,7 @@ where GS: GameState {
   fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
     match event {
       WindowEvent::CloseRequested => {
-        println!("The close button was pressed. Stopping program.");
+        println!("The close button was pressed.");
         event_loop.exit();
       },
       WindowEvent::Resized(new_size) => {
@@ -538,13 +544,18 @@ where GS: GameState {
         
         self.accumulator += frame_time;
         
+        let runs_update = self.accumulator >= self.engine.fixed_time_step;
+        
         while self.accumulator >= self.engine.fixed_time_step {
           self.game_step(event_loop);
           
           self.accumulator -= self.engine.fixed_time_step;
         }
         
-        self.game_state.draw(&mut self.engine);
+        if runs_update {
+          self.game_state.draw(&mut self.engine);
+        }
+        
         match self.draw() {
           Ok(_) => {}
           Err(SurfaceError::Lost) => { // If the swapchain is lost (e.g. driver update, monitor unplugged), recreate it

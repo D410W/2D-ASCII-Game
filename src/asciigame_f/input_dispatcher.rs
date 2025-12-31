@@ -1,9 +1,9 @@
-#[allow(dead_code)]
-
 use crate::{GameState, InputManager};
 
 use std::collections::HashMap;
 use crossterm::event::KeyCode;
+
+type EventFunc<GS> = dyn FnMut(&mut GS);
 
 #[derive(Eq, PartialEq, Hash, Clone)]
 pub enum KeyState {
@@ -16,12 +16,12 @@ pub enum KeyState {
   Down, // Pressed or Held or PressedAndReleased
 }
 
-pub struct InputDispatcher<S> {
-  // A map from a 'Key' to a function that modifies 'T'
-  bindings: HashMap<(KeyCode, KeyState), Box<dyn FnMut(&mut S)>>,
+pub struct InputDispatcher<GS> {
+  // A map from a 'Key event' to a function that modifies 'GS', which should be a GameState.
+  bindings: HashMap<(KeyCode, KeyState), Box<EventFunc<GS>>>,
 }
 
-impl<S> InputDispatcher<S> {
+impl<GS> InputDispatcher<GS> {
   pub fn new() -> Self {
     Self {
       bindings: HashMap::new(),
@@ -29,14 +29,14 @@ impl<S> InputDispatcher<S> {
   }
   
   /// Subscribe a function to a key.
-  pub fn bind<F>(&mut self, key: KeyCode, key_state: KeyState, callback: F) -> ()
-  where F: FnMut(&mut S) + 'static {
+  pub fn bind<F>(&mut self, key: KeyCode, key_state: KeyState, callback: F)
+  where F: FnMut(&mut GS) + 'static {
     self.bindings.insert((key, key_state), Box::new(callback));
   }
   
-  pub fn dispatch(&mut self, manager: &mut InputManager, target: &mut S) {
+  pub fn dispatch(&mut self, manager: &mut InputManager, target: &mut GS) { // TODO need to remove this and use only dispatch_single()
     for ((key_code, target_state), callback) in &mut self.bindings {
-      let current_state = manager.key(*key_code);
+      let current_state = manager.get_key(*key_code);
       
       let is_triggered = match target_state {
         KeyState::Down => current_state != KeyState::Unactive && current_state != KeyState::Released,
@@ -53,7 +53,7 @@ impl<S> InputDispatcher<S> {
     }
   }
   
-  pub fn dispatch_single(&mut self, key_code: KeyCode, target: &mut S) { // No KeyState, since we assume it was a 'Pressed' and 'Released' in the same frame.
+  pub fn dispatch_single(&mut self, key_code: KeyCode, _manager: &mut InputManager, target: &mut GS) {
     if let Some(callback) = self.bindings.get_mut(&(key_code, KeyState::Pressed)) {
       callback(target);
     }

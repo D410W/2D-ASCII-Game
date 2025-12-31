@@ -1,4 +1,3 @@
-mod asciigame;
 use asciigame::{*};
 
 use crossterm::event::{KeyCode};
@@ -20,7 +19,7 @@ impl GameState for Walker {
   fn new(ctx: &mut Engine<Self>) -> Self {
     ctx.set_framerate(10);
     
-    let (swidth, sheight) = (30, 15);
+    let (swidth, sheight) = (60, 30);
     
     ctx.db.resize(swidth, sheight);
   
@@ -37,7 +36,7 @@ impl GameState for Walker {
     ctx.bind(KeyCode::Char('d'), KeyState::Down, move |gs| { if gs.pos.0 < swidth - 1 { gs.pos.0 += 1; } } );
     ctx.bind(KeyCode::Char('a'), KeyState::Down, move |gs| { if gs.pos.0 > 0 { gs.pos.0 -= 1; } } );
     
-    return walker;
+    walker
   }
   
   fn update(&mut self, ctx: &mut Engine<Walker>) {
@@ -48,17 +47,17 @@ impl GameState for Walker {
   
   fn draw(&mut self, ctx: &mut Engine<Walker>) {
 
-    let (width, height) = ctx.db.get_size();
+    let (width, height) = ctx.db.get_size_usize();
     
     let lettrs: Vec<char> = (('0' as u32)..=('z' as u32)).map(|n| char::from_u32(n).unwrap()).collect();
     
-    for w in 1..=width {
-      for h in 1..=height {
+    for w in 0..=width-1 {
+      for h in 0..=height-1 {
       
         let bcolor = ( (h+w) as u8 % 2 ) * 100;
       
-        ctx.db.set_char(w-1, h-1, Character{
-          symbol: lettrs[(w-1) as usize],
+        ctx.db.set_char(w as u32, h as u32, Character{
+          symbol: if w < lettrs.len() { lettrs[w as usize] } else { ' ' },
           color: Color{r: 100, g: 100, b: 100},
           color_back: Color{r: bcolor, g: 0, b: 0},
         });
@@ -79,12 +78,11 @@ fn main() -> Result<()> {
   
   let args: Vec<String> = std::env::args().collect();
     
-  let c: char;
-  if args.len() > 1 {
-    c = args[1].chars().nth(0).unwrap().to_ascii_lowercase()
+  let c: char = if args.len() > 1 {
+    args[1].chars().next().unwrap().to_ascii_lowercase()
   } else {
-    c = 't';
-  }
+    't'
+  };
   
   if c != 'w' {
     let mut game = TerminalGame::<Walker>::new();

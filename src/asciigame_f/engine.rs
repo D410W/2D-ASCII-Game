@@ -1,5 +1,3 @@
-#[allow(dead_code)]
-
 use crate::{/*WindowWrapper, AsciiInterface,*/ DrawBuffer, InputManager, GameState, InputDispatcher, KeyState};
 
 use crossterm::{terminal, execute, cursor, event::KeyCode};
@@ -25,7 +23,7 @@ where GS: GameState {
 
     let (term_w, term_h) = screen_size;
   
-    let game = Engine::<GS> {
+    Engine::<GS> {
       framerate: 10,
       fixed_time_step: Duration::from_secs_f32(1.0 / 10.0),
       frame_counter: 0,
@@ -33,9 +31,7 @@ where GS: GameState {
       db: DrawBuffer::new(term_w, term_h),
       inp_man: InputManager::new(),
       inp_dis: InputDispatcher::<GS>::new(),
-    };
-    
-    game
+    }
   }
   
   pub fn set_framerate(&mut self, new_fps: u64) {
@@ -43,7 +39,7 @@ where GS: GameState {
     self.fixed_time_step = Duration::from_secs_f32(1.0 / new_fps as f32);
   }
   
-  pub fn bind<F>(&mut self, key: KeyCode, key_state: KeyState, callback: F) -> ()
+  pub fn bind<F>(&mut self, key: KeyCode, key_state: KeyState, callback: F)
   where F: FnMut(&mut GS) + 'static {
     self.inp_dis.bind(key, key_state, callback);
   }

@@ -1,5 +1,5 @@
 [package]
-name = "ascii-game"
+name = "asciigame"
 version = "0.1.0"
 edition = "2024"
 
@@ -24,6 +24,13 @@ glyphon = "0.10.0"
 bytemuck = { version = "1.16", features = [
   "derive",
 ] }
+
+[dev-dependencies]
+criterion = "0.8.1"
+
+[[bench]]
+name = "startup_win"
+harness = false
 
 # [profile.release]
 # opt-level = "z"     # Optimize for size (instead of '3' for speed)

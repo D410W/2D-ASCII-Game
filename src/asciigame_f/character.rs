@@ -1,5 +1,3 @@
-#[allow(dead_code)]
-
 #[derive(Clone, Copy, PartialEq)]
 pub struct Color {
   pub r: u8,
@@ -10,25 +8,25 @@ pub struct Color {
 impl From<crossterm::style::Color> for Color {
   fn from(cross_color: crossterm::style::Color) -> Self {
     if let crossterm::style::Color::Rgb{r, g, b} = cross_color {
-      return Color{r, g, b};
+      Color{r, g, b}
     } else {
-      return Color{r: 0, g: 255, b: 0};
+      Color{r: 0, g: 255, b: 0}
     }
   }
 }
 
-impl Into<crossterm::style::Color> for Color {
-  fn into(self) -> crossterm::style::Color {
-    return crossterm::style::Color::Rgb {
-      r: self.r,
-      g: self.g,
-      b: self.b
-    };
+impl From<Color> for crossterm::style::Color {
+  fn from(val: Color) -> Self {
+    crossterm::style::Color::Rgb {
+      r: val.r,
+      g: val.g,
+      b: val.b
+    }
   }
 }
 
 /// Colored 'character' class. Can be seen as a "pixel" to the WindowBuffer.
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub struct Character {
   pub symbol: char,
   pub color: Color,

@@ -1,4 +1,3 @@
-#[allow(dead_code)]
 use crate::{Engine};
 
 /// A Generic struct that implements the basic 'update' and 'draw' game-logic methods.
