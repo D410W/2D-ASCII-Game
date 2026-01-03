@@ -23,7 +23,7 @@ where GS: GameState {
   pub fn new() -> Result<Self> {
     let (cols, rows) = terminal::size()?;
     
-    let mut eng = Engine::<GS>::new((cols as u32, rows as u32));
+    let mut eng = Engine::<GS>::new((cols as usize, rows as usize));
     let gs = GameState::new(&mut eng);
     
     let s = Self {

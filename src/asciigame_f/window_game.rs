@@ -179,7 +179,7 @@ impl WindowState {
     })
   }
   
-  pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>, grid_cols: u32, grid_rows: u32) {
+  pub fn resize(&mut self, new_size: winit::dpi::PhysicalSize<u32>, grid_cols: usize, grid_rows: usize) {
     if new_size.width > 0 && new_size.height > 0 {
     
       self.size = new_size;
@@ -260,7 +260,7 @@ where GS: GameState {
   pub fn new() -> Result<Self> {    
     let (cols, rows) = (32, 18);
     
-    let mut eng = Engine::<GS>::new((cols as u32, rows as u32));
+    let mut eng = Engine::<GS>::new((cols, rows));
     let gs = GameState::new(&mut eng);
     
     Ok(Self{

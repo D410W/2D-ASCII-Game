@@ -3,8 +3,8 @@ use crate::{Character};
 use anyhow::Result;
 
 pub struct DrawBuffer {
-  pub width: u32,
-  pub height: u32,
+  pub width: usize,
+  pub height: usize,
   pub characters: Vec<Character>,
   
   pub text_changed: bool,
@@ -18,28 +18,22 @@ impl std::ops::Index<(usize, usize)> for DrawBuffer {
 }
 
 impl DrawBuffer {
-  pub fn new(p_width: u32, p_height: u32) -> Self {
-    let w_us = p_width as usize;
-    let h_us = p_height as usize;
-    
+  pub fn new(p_width: usize, p_height: usize) -> Self {
     DrawBuffer {
       width: p_width,
       height: p_height,
-      characters: vec![Character::default(); w_us * h_us], // reserving the used screen space
+      characters: vec![Character::default(); p_width * p_height], // reserving the used screen space
       
       text_changed: true,
     }
   }
   
   pub fn get_size_usize(&mut self) -> (usize, usize) {
-    (self.width as usize, self.height as usize)
+    (self.width, self.height)
   }
   
-  pub fn resize(&mut self, p_width: u32, p_height: u32) -> &mut Self {
-    let w_us = p_width as usize;
-    let h_us = p_height as usize;
-    
-    self.characters.resize(w_us * h_us, Default::default());
+  pub fn resize(&mut self, p_width: usize, p_height: usize) -> &mut Self {
+    self.characters.resize(p_width * p_height, Default::default());
     
     self.width = p_width;
     self.height = p_height;
@@ -47,8 +41,8 @@ impl DrawBuffer {
     self
   }
   
-  pub fn set_char(&mut self, col: u32, row: u32, character: Character) -> &mut Self {
-    let char_ref = &mut self.characters[row as usize * self.width as usize + col as usize];
+  pub fn set_char(&mut self, col: usize, row: usize, character: Character) -> &mut Self {
+    let char_ref = &mut self.characters[row * self.width + col];
     if *char_ref != character {
       *char_ref = character;
       self.text_changed = true;
@@ -58,9 +52,9 @@ impl DrawBuffer {
   }
   
   pub fn clear(&mut self) -> &mut Self {
-    for i in 0..(self.height as usize) {
-      for j in 0..(self.width as usize) {
-        let char_ref = &mut self.characters[i * self.width as usize + j];
+    for i in 0..(self.height) {
+      for j in 0..(self.width) {
+        let char_ref = &mut self.characters[i * self.width + j];
         if *char_ref != Default::default() {
           *char_ref = Default::default();
           self.text_changed = true;        
@@ -72,9 +66,9 @@ impl DrawBuffer {
   }
   
   pub fn fill_char(&mut self, character: Character) -> &mut Self {
-    for i in 0..(self.height as usize) {
-      for j in 0..(self.width as usize) {
-        let char_ref = &mut self.characters[i * self.width as usize + j];
+    for i in 0..(self.height) {
+      for j in 0..(self.width) {
+        let char_ref = &mut self.characters[i * self.width + j];
         if *char_ref != character {
           *char_ref = character;
           self.text_changed = true;        

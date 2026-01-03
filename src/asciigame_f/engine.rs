@@ -18,7 +18,7 @@ pub struct Engine<GS> { // <GameState, Wrapper>
 
 impl<GS> Engine<GS>
 where GS: GameState {
-  pub fn new(screen_size: (u32, u32)) -> Self {
+  pub fn new(screen_size: (usize, usize)) -> Self {
     // use std::io::stdout;
 
     let (term_w, term_h) = screen_size;
