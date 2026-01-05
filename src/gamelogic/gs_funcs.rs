@@ -9,17 +9,25 @@ impl Walker {
   pub fn is_position_walkable(&mut self, position: (i32, i32)) -> bool {
     if position.0 < 0 || position.1 < 0 {
       false
-    } else if position.0 >= self.screen_dims.0 as i32 || position.1 >= self.screen_dims.1 as i32 {
+    } else if position.0 >= self.map_dims.0 as i32 || position.1 >= self.map_dims.1 as i32 {
       false
     } else {
-      let pos = &self.map[position.1 as usize * self.screen_dims.0 + position.0 as usize];
+      let pos = &self.map[position.1 as usize * self.map_dims.0 + position.0 as usize];
       
       *pos == Cell::Floor || *pos == Cell::Corridor
     }
   }
   
   pub fn get_cell(&self, x: usize, y: usize) -> Cell {
-    self.map[x + y * self.screen_dims.0]
+    self.map[x + y * self.map_dims.0]
+  }
+  
+  pub fn get_cell_ref(&self, x: i32, y: i32) -> Option<&Cell> {
+    if x < 0 || y < 0 || x >= self.map_dims.0 as i32 || y >= self.map_dims.1 as i32 {
+      return None;
+    }
+    
+    Some(&self.map[x as usize + y as usize * self.map_dims.0])
   }
   
   pub fn get_cell_char(&mut self, cell_type: Cell) -> Character {
@@ -58,7 +66,7 @@ impl Walker {
     
     let mut came_from = HashMap::<(usize, usize), (usize, usize)>::new();
     let mut to_look = VecDeque::new();
-    let mut visited = vec![false; self.screen_dims.0 * self.screen_dims.1];
+    let mut visited = vec![false; self.map_dims.0 * self.map_dims.1];
     to_look.push_back( start );
     
     while let Some(current) = if is_dfs { to_look.pop_back() } else { to_look.pop_front() } {
@@ -80,14 +88,14 @@ impl Walker {
         return Some(path);
       }
       
-      if current.0 >= self.screen_dims.0 ||
-         current.1 >= self.screen_dims.1 { continue; }
+      if current.0 >= self.map_dims.0 ||
+         current.1 >= self.map_dims.1 { continue; }
       
       if self.get_cell(current.0, current.1) != Cell::Void &&
          self.get_cell(current.0, current.1) != Cell::Corridor &&
          current != start { continue; }
       
-      let visit_bool = &mut visited[current.0 + current.1 * self.screen_dims.0];
+      let visit_bool = &mut visited[current.0 + current.1 * self.map_dims.0];
       if *visit_bool {
         continue;
       } else {
@@ -103,7 +111,7 @@ impl Walker {
         let pos_y = current.1 as i32 + dir.1;
         
         if pos_x >= 0 && pos_y >= 0 &&
-           pos_x < self.screen_dims.0 as i32 && pos_y < self.screen_dims.0 as i32 {
+           pos_x < self.map_dims.0 as i32 && pos_y < self.map_dims.0 as i32 {
           let new_pos = (pos_x as usize, pos_y as usize);
           
           if !came_from.contains_key(&new_pos) {
@@ -130,6 +138,8 @@ impl Walker {
     
     let dx = target.0 - origin.0;
     let dy = target.1 - origin.1;
+    
+    if dx.pow(2) + dy.pow(2) > max_dist.pow(2) as i32 { return false; }
     
     let dmax = dx.abs().max(dy.abs());
     let dmin = dx.abs().min(dy.abs());

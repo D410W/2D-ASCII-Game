@@ -6,6 +6,7 @@ use crate::common_structs::{*};
 
 pub struct Walker {
   pub screen_dims: (usize, usize),
+  pub map_dims: (usize, usize),
   pub map: Vec<Cell>,
   pub map_seen: Vec<bool>,
   
@@ -17,29 +18,40 @@ pub struct Walker {
 
 impl GameState for Walker {
   fn new(ctx: &mut Engine<Self>) -> Self {
-    use rand::Rng;
+    use rand::prelude::{*};
   
     ctx.set_framerate(10);
     
-    let (swidth, sheight) = (60, 30);
-    ctx.db.resize(swidth, sheight);
+    let (screen_width, screen_height) = (60, 30);
+    let (map_width, map_height) = (100, 100);
+    ctx.db.resize(screen_width, screen_height);
   
     let mut walker = Walker{
-      screen_dims: (swidth, sheight),
-      map: vec![Cell::Void; swidth * sheight],
-      map_seen: vec![false; swidth * sheight],
+      screen_dims: (screen_width, screen_height),
+      map_dims: (map_width, map_height),
+      map: vec![Cell::Floor; map_width * map_height],
+      map_seen: vec![false; map_width * map_height],
       
-      player_pos: (10, 10),
-      player_char: Character{ symbol: '@', ..Default::default() },
+      player_pos: (5, 5),
+      player_char: Character{ symbol: '@', color: Color{r: 100, g: 100, b: 255}, ..Default::default() },
       
       should_run: true,
     };
     
+    // generating map
+    let rooms_area = (20usize, 20usize, 60usize, 60usize);
+    
+    for y in rooms_area.1..(rooms_area.3 + rooms_area.1) {
+      for x in rooms_area.0..(rooms_area.2 + rooms_area.0) {
+        walker.map[x + y * walker.map_dims.0] = Cell::Void;
+      }
+    }
+    
     let mut rooms: Vec::<(usize, usize, usize, usize)> = vec![]; // room = (pos_x, pos_y, size_x, size_y)
     let num_rooms = 5;
     
-    // generating map
     let mut rng = rand::rng();
+    // making rooms
     for room_index in 0..num_rooms {
     
       let max_room_size = 20;
@@ -58,7 +70,7 @@ impl GameState for Walker {
         tries += 1;
         
         let size = [rng.random_range(min_room_size..max_room_size); 2];
-        let pos = (rng.random_range(0..walker.screen_dims.0 - size[0]), rng.random_range(0..walker.screen_dims.1 - size[1]) );
+        let pos = (rng.random_range(0..(rooms_area.2 - size[0])), rng.random_range(0..(rooms_area.3 - size[1])) );
         
         for room in rooms.iter() {
           let new_range_x = (pos.0, pos.0 + size[0]-1);
@@ -79,7 +91,9 @@ impl GameState for Walker {
         if failed { continue }
         rooms.push( (pos.0, pos.1, size[0], size[1]) );
         
-        if room_index == 0 { walker.player_pos = (pos.0 as i32 + 2, pos.1 as i32 + 2); }
+        println!("room size: {:?}; room pos: {:?}", size, pos);
+        
+        // if room_index == 0 { walker.player_pos = (pos.0 as i32 + 2, pos.1 as i32 + 2); }
       }
       
       
@@ -89,23 +103,26 @@ impl GameState for Walker {
     
     for room in &rooms {
       for x in 0..room.2 as usize {
-        walker.map[room.0 + x + room.1 as usize * walker.screen_dims.0] = Cell::Wall;
-        walker.map[room.0 + x + (room.1 + room.3-1) as usize * walker.screen_dims.0] = Cell::Wall;
+        walker.map[rooms_area.0 + room.0 + x + (rooms_area.1 + room.1 as usize) * walker.map_dims.0] = Cell::Wall;
+        walker.map[rooms_area.0 + room.0 + x + (rooms_area.1 + (room.1 + room.3-1) as usize) * walker.map_dims.0] = Cell::Wall;
       }
       
       for y in 0..room.3 as usize {
-        walker.map[room.0 + (room.1 + y) as usize * walker.screen_dims.0] = Cell::Wall;
-        walker.map[room.0 + room.2-1 + (room.1 + y) as usize * walker.screen_dims.0] = Cell::Wall;
+        walker.map[rooms_area.0 + room.0 + (rooms_area.1 + (room.1 + y) as usize) * walker.map_dims.0] = Cell::Wall;
+        walker.map[rooms_area.0 + room.0 + room.2-1 + (rooms_area.1 + (room.1 + y) as usize) * walker.map_dims.0] = Cell::Wall;
       }
       
       for y in 1..room.3-1 as usize {
         for x in 1..room.2-1 as usize {
-          walker.map[room.0 + x + (room.1 + y) * walker.screen_dims.0] = Cell::Floor;
+          walker.map[rooms_area.0 + room.0 + x + (rooms_area.1 + room.1 + y) * walker.map_dims.0] = Cell::Floor;
         }
       }
     
     }
-        
+    
+    let mut last_door = (0, 0);
+    
+    // corridors between rooms
     for iteration in 0..num_rooms {
       let mut tries = 0;
       
@@ -125,29 +142,61 @@ impl GameState for Walker {
         let door1 = possible_doors1[rng.random_range(0..4)];
         let door2 = possible_doors2[rng.random_range(0..4)];
         
-        let corridor = walker.bfs_to_pos(&mut rng, door1, door2);
+        // println!("begin: {:?}, end: {:?}", door1, door2);
+        
+        let corridor = walker.bfs_to_pos(&mut rng, (rooms_area.0 + door1.0, rooms_area.1 + door1.1),
+                                                   (rooms_area.0 + door2.0, rooms_area.1 + door2.1));
         
         if let Some(corridor) = corridor {
           // println!("{:?}", corridor);
         
           for cell in corridor {
-            walker.map[cell.0 + cell.1 * walker.screen_dims.0] = Cell::Corridor;
+            walker.map[cell.0 + cell.1 * walker.map_dims.0] = Cell::Corridor;
           }
+          
+          last_door = door2;
+          break;
         } else {
           tries += 1;
           continue;
         }
-        break;
       }
     }
     
+    // entrnace
+    let mut tries = 0;
+    
+    while tries < 20 {
+      
+      let door = (rooms_area.0 + last_door.0, rooms_area.1 + last_door.1);
+      let dungeon_entrance = (rooms_area.0, rooms_area.1 + rooms_area.3/2);
+      
+      println!("entrance: {:?}, door: {:?}", dungeon_entrance, door);
+      
+      let corridor = walker.bfs_to_pos(&mut rng, door, dungeon_entrance);
+      
+      if let Some(corridor) = corridor {
+        for cell in corridor {
+          walker.map[cell.0 + cell.1 * walker.map_dims.0] = Cell::Corridor;
+        }
+      } else {
+        tries += 1;
+        continue;
+      }
+      break;
+    }
+    
+    println!("tries to make entrance: {}", tries);
+    
     // binding keys
+    let noclip = false;
+    
     ctx.bind(KeyCode::Esc, KeyState::Pressed, |gs| { gs.should_run = false; } );
     
-    ctx.bind(KeyCode::Char('w'), KeyState::Down, move |gs| { if gs.is_position_walkable((gs.player_pos.0, gs.player_pos.1 - 1)) { gs.player_pos.1 -= 1; } } );
-    ctx.bind(KeyCode::Char('s'), KeyState::Down, move |gs| { if gs.is_position_walkable((gs.player_pos.0, gs.player_pos.1 + 1)) { gs.player_pos.1 += 1; } } );
-    ctx.bind(KeyCode::Char('d'), KeyState::Down, move |gs| { if gs.is_position_walkable((gs.player_pos.0 + 1, gs.player_pos.1)) { gs.player_pos.0 += 1; } } );
-    ctx.bind(KeyCode::Char('a'), KeyState::Down, move |gs| { if gs.is_position_walkable((gs.player_pos.0 - 1, gs.player_pos.1)) { gs.player_pos.0 -= 1; } } );
+    ctx.bind(KeyCode::Char('w'), KeyState::Down, move |gs| { if noclip || gs.is_position_walkable((gs.player_pos.0, gs.player_pos.1 - 1)) { gs.player_pos.1 -= 1; } } );
+    ctx.bind(KeyCode::Char('s'), KeyState::Down, move |gs| { if noclip || gs.is_position_walkable((gs.player_pos.0, gs.player_pos.1 + 1)) { gs.player_pos.1 += 1; } } );
+    ctx.bind(KeyCode::Char('d'), KeyState::Down, move |gs| { if noclip || gs.is_position_walkable((gs.player_pos.0 + 1, gs.player_pos.1)) { gs.player_pos.0 += 1; } } );
+    ctx.bind(KeyCode::Char('a'), KeyState::Down, move |gs| { if noclip || gs.is_position_walkable((gs.player_pos.0 - 1, gs.player_pos.1)) { gs.player_pos.0 -= 1; } } );
     
     walker
   }
@@ -159,28 +208,39 @@ impl GameState for Walker {
   }
   
   fn draw(&mut self, ctx: &mut Engine<Walker>) {
-
-    let (width, height) = ctx.db.get_size_usize();
+    let corner_x = self.player_pos.0 - (self.screen_dims.0/2) as i32;
+    let corner_y = self.player_pos.1 - (self.screen_dims.1/2) as i32;
+    let (width, height) = self.screen_dims;
     
     for y in 0..=height - 1 {
       for x in 0..=width - 1 {
-        let cell_char;
-        if self.has_lineofsight( (self.player_pos.0 as usize, self.player_pos.1 as usize), (x, y), 10, false) {
-          cell_char = self.get_cell_char(self.map[y * width + x]);
-          self.map_seen[y * width + x] = true;
-        } else {
-          if self.map_seen[y * width + x] {
-            cell_char = self.get_cell_char(self.map[y * width + x]).dim_background_safe(20).dim_color_safe(30);
-          } else {
-            cell_char = Default::default();
-          }
-        };
+        let (phys_x, phys_y) = (corner_x + x as i32, corner_y + y as i32);
+      
+        let cell = self.get_cell_ref(phys_x, phys_y);
+        let cell_char: Character;
+        
+        match cell {
+          None => { cell_char = Default::default(); }
+          Some(cref) => {
+            let char_pos = (phys_x as usize, phys_y as usize);
+            if self.has_lineofsight( (self.player_pos.0 as usize, self.player_pos.1 as usize), (char_pos.0, char_pos.1), 10, false) {
+              cell_char = self.get_cell_char(*cref);
+              self.map_seen[char_pos.0 + char_pos.1 * self.map_dims.0] = true;
+            } else {
+              if self.map_seen[char_pos.0 + char_pos.1 * self.map_dims.0] {
+                cell_char = self.get_cell_char(*cref).dim_background_safe(20).dim_color_safe(30);
+              } else {
+                cell_char = Default::default();
+              }
+            };
+          },
+        }
         
         ctx.db.set_char(x, y, cell_char);
       }
     }
     
-    ctx.db.set_char(self.player_pos.0 as usize, self.player_pos.1 as usize, self.player_char);
+    ctx.db.set_char(self.screen_dims.0/2, self.screen_dims.1/2, self.player_char);
     
   }
   
